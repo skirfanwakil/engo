@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Help</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='user.css') }}">
+</head>
+<body>
+    <div class="container">
+        <section class="form-card">
+            <h1>Seeking Assistance</h1>
+            <p>Tell us what you need, and we will find a match.</p>
+            
+            <form onsubmit="return false;">
+                <div class="input-group">
+                    <label>Name</label>
+                    <input type="text" id="uname" placeholder="Your Name" required>
+                </div>
+
+                <div class="input-group">
+                    <label>Help Type</label>
+                    <select id="uhelptype" required>
+                        <option value="" disabled selected>Select help type</option>
+                        <option value="Food">Food</option>
+                        <option value="Medicine">Medicine</option>
+                        <option value="Education">Education</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Contact Number</label>
+                    <input type="tel" id="ucontact" pattern="[0-9]{10}" placeholder="10 Digit Number" required>
+                </div>
+
+                <div class="input-group">
+                    <label>Pincode</label>
+                    <input type="text" id="upincode" pattern="[0-9]{6}" placeholder="6 Digit Pincode" required>
+                </div>
+
+                <button type="submit" id="usubmit" class="btn-submit" onclick="showmatches()">Find Help ✅</button>
+            </form>
+        </section>
+        <div id="result-section" style="display:none; margin-top: 30px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h3 style="color: #2c3e50; margin-bottom: 15px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+        Found Matches (Nearest First)
+    </h3>
+    <table style="width:100%; border-collapse: collapse; font-family: Arial, sans-serif;">
+        <thead>
+            <tr style="background-color: #3498db; color: white;">
+                <th style="padding: 12px; border: 1px solid #ddd;">Name</th>
+                <th style="padding: 12px; border: 1px solid #ddd;">Contact</th>
+                <th style="padding: 12px; border: 1px solid #ddd;">Pincode</th>
+                <th style="padding: 12px; border: 1px solid #ddd;">Distance</th>
+            </tr>
+        </thead>
+        <tbody id="match-data">
+            </tbody>
+    </table>
+</div>
+    </div>
+
+    <script>
+     async function showmatches() {
+    const isUser = document.getElementById('uname') !== null;
+    const prefix = isUser ? 'u' : 'v';
+    
+    // Data check
+    const nameVal = document.getElementById(prefix + 'name').value;
+    const helpVal = document.getElementById(prefix + 'helptype').value;
+    const contactVal = document.getElementById(prefix + 'contact').value;
+    const pinVal = document.getElementById(prefix + 'pincode').value;
+
+    if(!nameVal || !helpVal || !contactVal || !pinVal) {
+        alert("Fill All The Details!");
+        return;
+    }
+
+    const payload = {
+        name: nameVal,
+        helpType: helpVal,
+        contact: contactVal,
+        pincode: pinVal,
+        role: isUser ? 'User' : 'Volunteer'
+    };
+
+    try {
+        const response = await fetch('/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        
+        if (result.status === "success") {
+            const resultDiv = document.getElementById('result-section');
+            const tbody = document.getElementById('match-data');
+            
+            tbody.innerHTML = ""; // Clear old data
+            
+            if (result.matches.length > 0) {
+                resultDiv.style.display = "block";
+                result.matches.forEach(match => {
+                    let distText = match.distance === 0 ? "Same Area" : match.distance + " units away";
+                    tbody.innerHTML += `<tr>
+                        <td>${match.Name}</td>
+                        <td>${match.Contact}</td>
+                        <td>${match.PinCode}</td>
+                        <td>${distText}</td>
+                    </tr>`;
+                });
+            } else {
+                alert("Data saved! But there is no result.");
+            }
+        } else {
+            alert("Server Error: " + result.message);
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        alert("Unable to connect with python server!");
+    }
+}
+    </script>
+</body>
+</html>
