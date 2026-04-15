@@ -43,48 +43,58 @@ def volunteer_page():
 def submit():
     try:
         data = request.json
-        user_name = data.get('name')
-        user_contact = str(data.get('contact')).strip()
-        user_pin = int(data.get('pincode'))
-        user_role = data.get('role')
-        user_help = data.get('helpType')
-
-        # --- STEP 1: SMART DUPLICATE CHECK ---
-        all_records = sheet.get_all_records()
-        already_exists = False
         
-        for record in all_records:
-            # Match only if same Contact AND same Role
-            if (str(record.get('Contact')).strip() == user_contact and 
-                str(record.get('Role')) == user_role):
-                already_exists = True
-                break
+        # --- 1. DATA CLEANING ---
+        user_name = str(data.get('name')).strip().title()
+        user_contact = str(data.get('contact')).replace(" ", "").strip()
+        user_pin = int(data.get('pincode'))
+        user_role = str(data.get('role')).strip()
+        user_help = str(data.get('helpType')).strip().title()
 
-        if not already_exists:
+        all_records = sheet.get_all_records()
+
+        # --- 2. UNIVERSAL DUPLICATE CHECK (For Both Roles) ---
+        # Ye check karega ki kya same Contact + same Role pehle se exists karta hai
+        is_duplicate = any(
+            str(record.get('Contact')).replace(" ", "").strip() == user_contact and 
+            str(record.get('Role')).strip() == user_role 
+            for record in all_records
+        )
+
+        if not is_duplicate:
+            # Agar naya data hai, toh append karo
             new_row = [user_name, user_help, user_contact, user_pin, user_role]
             sheet.append_row(new_row)
+            # Nayi entry ke baad records refresh karein matching ke liye
+            all_records = sheet.get_all_records()
             status_msg = "success"
         else:
+            # Agar duplicate hai, toh sirf msg set karo, append_row mat karo
             status_msg = "already_existed"
         
-        # --- STEP 2: MATCHING LOGIC ---
-        # Fetch fresh data after insertion
-        all_records = sheet.get_all_records()
+        # --- 3. SMART MATCHING LOGIC ---
         matches = []
+        seen_contacts = set() # Taaki results mein ek hi banda do baar na dikhe
         opposite_role = "Volunteer" if user_role == "User" else "User"
         
         for record in all_records:
-            if str(record.get('Role')) == opposite_role and str(record.get('HelpType')) == user_help:
-                # Handle cases where PinCode might be empty or not a number
+            db_contact = str(record.get('Contact')).replace(" ", "").strip()
+            db_role = str(record.get('Role')).strip()
+            db_help = str(record.get('HelpType')).strip().title()
+
+            # Conditions: Opposite Role + Same Help Type + Unique Contact in Results
+            if db_role == opposite_role and db_help == user_help and db_contact not in seen_contacts:
                 try:
                     db_pin = int(record.get('PinCode', 0))
                     distance = abs(user_pin - db_pin)
+                    
                     record['distance'] = distance
                     matches.append(record)
+                    seen_contacts.add(db_contact)
                 except:
                     continue
         
-        # Sort by proximity
+        # Distance ke hisaab se sort karein (Sabse kareeb wala sabse upar)
         matches = sorted(matches, key=lambda x: x.get('distance', 9999))
         
         return jsonify({
@@ -94,9 +104,9 @@ def submit():
         })
 
     except Exception as e:
-        print(f"Submission Error: {e}")
+        print(f"Error: {e}")
         return jsonify({"status": "error", "message": str(e)})
-
+        
 # Vercel needs this to handle serverless execution
 if __name__ == '__main__':
     app.run(debug=True)
